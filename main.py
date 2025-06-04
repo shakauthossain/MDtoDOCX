@@ -30,11 +30,12 @@ def remove_empty_paragraphs_around(soup, tag_names):
 async def convert_md_to_docx(request: Request):
     data = await request.json()
     md_text = data.get("markdown", "")
+    client_name = data.get("client_name", "Client").strip()
     
     if not md_text:
         return {"error": "No markdown text provided"}
     
-    # Convert Markdown to HTML with table and list support
+    # Convert Markdown to HTML
     html = markdown2.markdown(md_text, extras=[
         "tables", 
         "fenced-code-blocks", 
@@ -42,17 +43,21 @@ async def convert_md_to_docx(request: Request):
         "footnotes"
     ])
     
-    # Clean up extra spacing using BeautifulSoup
+    # Clean up spacing
     soup = BeautifulSoup(html, "html.parser")
     remove_empty_paragraphs_around(soup, ["table", "img", "h1", "h2", "h3", "h4", "h5", "h6"])
     cleaned_html = str(soup)
     
-    # Convert cleaned HTML to DOCX
-    docx_io = html2docx(cleaned_html, title="Converted Document")
+    # Convert to DOCX
+    docx_io = html2docx(cleaned_html, title=f"Proposal for {client_name}")
     docx_io.seek(0)
     
+    # Sanitize filename
+    safe_client_name = "".join(c for c in client_name if c.isalnum() or c in (" ", "_", "-")).strip()
+    filename = f"Proposal for {safe_client_name}.docx"
+    
     headers = {
-        'Content-Disposition': 'attachment; filename="converted.docx"'
+        'Content-Disposition': f'attachment; filename="{filename}"'
     }
     
     return StreamingResponse(
