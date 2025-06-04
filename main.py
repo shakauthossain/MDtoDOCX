@@ -30,6 +30,7 @@ def remove_empty_paragraphs_around(soup, tag_names):
 async def convert_md_to_html(request: Request):
     data = await request.json()
     md_text = data.get("markdown", "")
+    client_name = data.get("client_name", "Client").strip()
     
     if not md_text:
         return {"error": "No markdown text provided"}
@@ -47,7 +48,24 @@ async def convert_md_to_html(request: Request):
     remove_empty_paragraphs_around(soup, ["table", "img", "h1", "h2", "h3", "h4", "h5", "h6"])
     cleaned_html = str(soup)
 
-    return JSONResponse(content={"html": cleaned_html})
+    # Prepare HTML as a downloadable file
+    html_bytes = cleaned_html.encode("utf-8")
+    html_io = BytesIO(html_bytes)
+    html_io.seek(0)
+
+    # Safe filename
+    safe_client_name = "".join(c for c in client_name if c.isalnum() or c in (" ", "_", "-")).strip()
+    filename = f"Proposal for {safe_client_name}.html"
+
+    headers = {
+        'Content-Disposition': f'attachment; filename="{filename}"'
+    }
+
+    return StreamingResponse(
+        html_io,
+        media_type='text/html',
+        headers=headers
+    )
 
 @app.post("/convert-html-to-docx")
 async def convert_html_to_docx(request: Request):
