@@ -80,14 +80,10 @@ async def convert_md_to_html(request: Request):
 
 @app.post("/convert-html-to-docx")
 async def convert_html_to_docx(file: UploadFile = File(...)):
-    html_content = await file.read()
+    html_content = await file.read()  # Read uploaded HTML file content
 
-    # soup = BeautifulSoup(html_content, "html.parser")
-    remove_empty_paragraphs_around(html_content, ["table", "img", "h1", "h2", "h3", "h4", "h5", "h6"])
-    # clean_extra_spacing_around_tables(soup)
-    cleaned_html = str(html_content)
-
-    docx_io = html2docx(cleaned_html, title="Proposal")
+    # Convert HTML content directly to DOCX BytesIO object
+    docx_io = html2docx(html_content.decode('utf-8'), title="Proposal")
     docx_io.seek(0)
 
     headers = {
