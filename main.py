@@ -59,7 +59,24 @@ async def convert_md_to_html(request: Request):
 
     cleaned_html = str(soup)
 
-    return JSONResponse(content={"html": cleaned_html})
+    # Prepare HTML as a downloadable fileAdd commentMore actions
+    html_bytes = cleaned_html.encode("utf-8")
+    html_io = BytesIO(html_bytes)
+    html_io.seek(0)
+
+    # Safe filename
+    safe_client_name = "".join(c for c in client_name if c.isalnum() or c in (" ", "_", "-")).strip()
+    filename = f"Proposal for {safe_client_name}.html"
+
+    headers = {
+        'Content-Disposition': f'attachment; filename="{filename}"'
+    }
+
+    return StreamingResponse(
+        html_io,
+        media_type='text/html',
+        headers=headers
+    )
 
 @app.post("/convert-html-to-docx")
 async def convert_html_to_docx(file: UploadFile = File(...)):
