@@ -34,6 +34,7 @@ def clean_extra_spacing(soup):
             temp = next_sibling.find_next_sibling()
             next_sibling.decompose()
             next_sibling = temp
+    return str(soup)  # <-- Add this line
 
 
 @app.post("/convert-html-to-docx")
