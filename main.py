@@ -5,6 +5,7 @@ import markdown2
 from html2docx import html2docx
 from bs4 import BeautifulSoup
 from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 app = FastAPI()
 
@@ -50,7 +51,6 @@ async def convert_md_to_docx(request: Request):
     cleaned_html = str(soup)
     
     # Convert to DOCX
-    docx_io = BytesIO()
     document = Document()
     for paragraph in cleaned_html.split("<p>"):
         if paragraph:
@@ -69,10 +69,9 @@ async def convert_md_to_docx(request: Request):
                                     run = document.add_paragraph()
                                     run.add_run(table_cell_text)
                                     run.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.left
-                                    run.paragraph_format.space_after = Pt(12)
+                                    run.paragraph_format.space_after = document.styles['Heading 1'].paragraph_format.space_after
     
-    document.save(docx_io)
-    docx_io.seek(0)
+    document.save("output.docx")
     
     # Sanitize filename
     safe_client_name = "".join(c for c in client_name if c.isalnum() or c in (" ", "_", "-")).strip()
@@ -82,8 +81,9 @@ async def convert_md_to_docx(request: Request):
         'Content-Disposition': f'attachment; filename="{filename}"'
     }
     
-    return StreamingResponse(
-        docx_io,
-        media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        headers=headers
-    )
+    with open("output.docx", "rb") as file:
+        return StreamingResponse(
+            file,
+            media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            headers=headers
+        )
