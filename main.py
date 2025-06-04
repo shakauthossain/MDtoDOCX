@@ -48,35 +48,9 @@ async def convert_html_to_docx(request: Request):
     # Clean and style HTML
     soup = BeautifulSoup(html, "html.parser")
     remove_empty_paragraphs_around(soup, ["table", "img", "h1", "h2", "h3", "h4", "h5", "h6"])
-    clean_extra_spacing(soup)
+    cleaned_html = clean_extra_spacing(soup)
 
-    styled_html = f"""
-    <html>
-    <head>
-        <style>
-            table {{
-                border-collapse: collapse;
-                width: 100%;
-            }}
-            th, td {{
-                border: 1px solid #000;
-                padding: 6px;
-                text-align: left;
-            }}
-            pre {{
-                background-color: #f4f4f4;
-                padding: 10px;
-                font-family: Consolas, monospace;
-            }}
-        </style>
-    </head>
-    <body>
-        {str(soup)}
-    </body>
-    </html>
-    """
-
-    docx_io: BytesIO = html2docx(styled_html, title=f"Proposal for {client_name}")
+    docx_io: BytesIO = html2docx(cleaned_html, title=f"Proposal for {client_name}")
     docx_io.seek(0)
 
     # Safe filename
