@@ -2,12 +2,29 @@ from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 from io import BytesIO
 import markdown2
-from docx import Document
-from docx.shared import Pt
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from html2docx import html2docx
 from bs4 import BeautifulSoup
 
 app = FastAPI()
+
+def remove_empty_paragraphs_around(soup, tag_names):
+    for tag_name in tag_names:
+        for tag in soup.find_all(tag_name):
+            # Remove empty <p> before the tag
+            for prev in tag.find_previous_siblings('p'):
+                if not prev.text.strip():
+                    prev.decompose()
+                    break
+                elif prev.name not in ["p", "br", None]:
+                    break
+
+            # Remove empty <p> after the tag
+            for next_ in tag.find_next_siblings('p'):
+                if not next_.text.strip():
+                    next_.decompose()
+                    break
+                elif next_.name not in ["p", "br", None]:
+                    break
 
 @app.post("/convert-md-to-docx")
 async def convert_md_to_docx(request: Request):
@@ -32,6 +49,7 @@ async def convert_md_to_docx(request: Request):
     cleaned_html = str(soup)
     
     # Convert to DOCX
+    docx_io = BytesIO()
     document = Document()
     for paragraph in cleaned_html.split("<p>"):
         if paragraph:
@@ -52,6 +70,9 @@ async def convert_md_to_docx(request: Request):
                                     run.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.left
                                     run.paragraph_format.space_after = Pt(12)
     
+    document.save(docx_io)
+    docx_io.seek(0)
+    
     # Sanitize filename
     safe_client_name = "".join(c for c in client_name if c.isalnum() or c in (" ", "_", "-")).strip()
     filename = f"Proposal for {safe_client_name}.docx"
@@ -59,10 +80,6 @@ async def convert_md_to_docx(request: Request):
     headers = {
         'Content-Disposition': f'attachment; filename="{filename}"'
     }
-    
-    docx_io = BytesIO()
-    document.save(docx_io)
-    docx_io.seek(0)
     
     return StreamingResponse(
         docx_io,
