@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+python-docx
+markdown2
+html2docx
