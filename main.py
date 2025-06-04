@@ -4,6 +4,7 @@ from io import BytesIO
 import markdown2
 from html2docx import html2docx
 from bs4 import BeautifulSoup
+from docx import Document
 
 app = FastAPI()
 
