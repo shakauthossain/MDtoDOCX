@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from io import BytesIO
 import markdown2
 from html2docx import html2docx
@@ -26,15 +26,14 @@ def remove_empty_paragraphs_around(soup, tag_names):
                 elif next_.name not in ["p", "br", None]:
                     break
 
-@app.post("/convert-md-to-docx")
-async def convert_md_to_docx(request: Request):
+@app.post("/convert-md-to-html")
+async def convert_md_to_html(request: Request):
     data = await request.json()
     md_text = data.get("markdown", "")
-    client_name = data.get("client_name", "Client").strip()
     
     if not md_text:
         return {"error": "No markdown text provided"}
-    
+
     # Convert Markdown to HTML
     html = markdown2.markdown(md_text, extras=[
         "tables", 
@@ -42,24 +41,40 @@ async def convert_md_to_docx(request: Request):
         "cuddled-lists", 
         "footnotes"
     ])
-    
-    # Clean up spacing
+
+    # Clean HTML using BeautifulSoup
     soup = BeautifulSoup(html, "html.parser")
     remove_empty_paragraphs_around(soup, ["table", "img", "h1", "h2", "h3", "h4", "h5", "h6"])
     cleaned_html = str(soup)
-    
-    # Convert to DOCX
-    docx_io = html2docx(cleaned_html, title=f"Proposal for {client_name}")
+
+    return JSONResponse(content={"html": cleaned_html})
+
+@app.post("/convert-html-to-docx")
+async def convert_html_to_docx(request: Request):
+    data = await request.json()
+    html = data.get("html", "")
+    client_name = data.get("client_name", "Client").strip()
+
+    if not html:
+        return {"error": "No HTML content provided"}
+
+    # Clean HTML again in case of user input
+    soup = BeautifulSoup(html, "html.parser")
+    remove_empty_paragraphs_around(soup, ["table", "img", "h1", "h2", "h3", "h4", "h5", "h6"])
+    cleaned_html = str(soup)
+
+    # Convert HTML to DOCX
+    docx_io: BytesIO = html2docx(cleaned_html, title=f"Proposal for {client_name}")
     docx_io.seek(0)
-    
-    # Sanitize filename
+
+    # Safe filename
     safe_client_name = "".join(c for c in client_name if c.isalnum() or c in (" ", "_", "-")).strip()
     filename = f"Proposal for {safe_client_name}.docx"
-    
+
     headers = {
         'Content-Disposition': f'attachment; filename="{filename}"'
     }
-    
+
     return StreamingResponse(
         docx_io,
         media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
