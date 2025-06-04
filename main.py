@@ -82,10 +82,10 @@ async def convert_md_to_html(request: Request):
 async def convert_html_to_docx(file: UploadFile = File(...)):
     html_content = await file.read()
 
-    soup = BeautifulSoup(html_content, "html.parser")
-    remove_empty_paragraphs_around(soup, ["table", "img", "h1", "h2", "h3", "h4", "h5", "h6"])
-    clean_extra_spacing_around_tables(soup)
-    cleaned_html = str(soup)
+    # soup = BeautifulSoup(html_content, "html.parser")
+    remove_empty_paragraphs_around(html_content, ["table", "img", "h1", "h2", "h3", "h4", "h5", "h6"])
+    # clean_extra_spacing_around_tables(soup)
+    cleaned_html = str(html_content)
 
     docx_io = html2docx(cleaned_html, title="Proposal")
     docx_io.seek(0)
