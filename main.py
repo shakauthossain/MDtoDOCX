@@ -1,8 +1,8 @@
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 from io import BytesIO
 import markdown2
-from html2docx import html2docx
+from html2docx import HtmlToDocx
 
 app = FastAPI()
 
@@ -10,20 +10,25 @@ app = FastAPI()
 async def convert_md_to_docx(request: Request):
     data = await request.json()
     md_text = data.get("markdown", "")
-    
+
     if not md_text:
         return {"error": "No markdown text provided"}
 
-    # Convert Markdown to HTML
     html = markdown2.markdown(md_text)
+    print("Generated HTML:", html)  # Debug
 
-    # Convert HTML to DOCX in-memory
+    converter = HtmlToDocx()
     docx_io = BytesIO()
-    html2docx(html, docx_io)
+    docx = converter.parse_html(html)
+    docx.save(docx_io)
     docx_io.seek(0)
 
     headers = {
         'Content-Disposition': 'attachment; filename="converted.docx"'
     }
-    
-    return StreamingResponse(docx_io, media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document', headers=headers)
+
+    return StreamingResponse(
+        docx_io,
+        media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        headers=headers
+    )
