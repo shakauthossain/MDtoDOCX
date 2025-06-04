@@ -5,3 +5,4 @@ markdown2
 html2docx
 beautifulsoup4
 python-multipart
+pandoc
