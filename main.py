@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse
 from io import BytesIO
 import markdown2
 from html2docx import html2docx
+from bs4 import BeautifulSoup
 
 app = FastAPI()
 
@@ -14,11 +15,25 @@ async def convert_md_to_docx(request: Request):
     if not md_text:
         return {"error": "No markdown text provided"}
     
-    # Convert Markdown to HTML (including tables as <table>)
-    html = markdown2.markdown(md_text, extras=["tables"])
+    # Convert Markdown to HTML with table and list support
+    html = markdown2.markdown(md_text, extras=[
+        "tables", 
+        "fenced-code-blocks", 
+        "cuddled-lists", 
+        "footnotes"
+    ])
     
-    # Convert HTML to DOCX using html2docx function (better table handling)
-    docx_io = html2docx(html, title="Converted Document")
+    # Clean up extra spacing after tables using BeautifulSoup
+    soup = BeautifulSoup(html, "html.parser")
+    for table in soup.find_all("table"):
+        next_elem = table.find_next_sibling()
+        if next_elem and next_elem.name == "p" and not next_elem.text.strip():
+            next_elem.decompose()  # Remove empty <p> after tables
+    
+    cleaned_html = str(soup)
+    
+    # Convert cleaned HTML to DOCX
+    docx_io = html2docx(cleaned_html, title="Converted Document")
     docx_io.seek(0)
     
     headers = {
