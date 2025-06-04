@@ -14,12 +14,11 @@ async def convert_md_to_docx(request: Request):
     if not md_text:
         return {"error": "No markdown text provided"}
     
-    # Convert Markdown to HTML
-    html = markdown2.markdown(md_text)
+    # Convert Markdown to HTML (including tables as <table>)
+    html = markdown2.markdown(md_text, extras=["tables"])
     
-    # Convert HTML to DOCX - html2docx() returns a BytesIO object directly
+    # Convert HTML to DOCX using html2docx function (better table handling)
     docx_io = html2docx(html, title="Converted Document")
-    
     docx_io.seek(0)
     
     headers = {
