@@ -1,24 +1,94 @@
-from fastapi import FastAPI, Form
+from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
+from io import BytesIO
 from html2docx import html2docx
-import io
+from bs4 import BeautifulSoup
 
 app = FastAPI()
 
-@app.post("/convert/")
-async def convert_html_to_docx(html: str = Form(...)):
-    # Create in-memory buffer
-    docx_io = io.BytesIO()
 
-    # Convert HTML string to DOCX
-    html2docx(html, docx_io)
+def remove_empty_paragraphs_around(soup, tag_names):
+    for tag_name in tag_names:
+        for tag in soup.find_all(tag_name):
+            for prev in tag.find_all_previous():
+                if prev.name == "p" and not prev.text.strip():
+                    prev.decompose()
+                    break
+                elif prev.name not in ["p", "br", None]:
+                    break
+            for next_ in tag.find_all_next():
+                if next_.name == "p" and not next_.text.strip():
+                    next_.decompose()
+                    break
+                elif next_.name not in ["p", "br", None]:
+                    break
 
-    # Reset buffer position
+
+def clean_extra_spacing(soup):
+    for p in soup.find_all("p"):
+        if not p.text.strip():
+            p.decompose()
+    for table in soup.find_all("table"):
+        next_sibling = table.find_next_sibling()
+        while next_sibling and (next_sibling.name == "br" or (next_sibling.name == "p" and not next_sibling.text.strip())):
+            temp = next_sibling.find_next_sibling()
+            next_sibling.decompose()
+            next_sibling = temp
+
+
+@app.post("/convert-html-to-docx")
+async def convert_html_to_docx(request: Request):
+    data = await request.json()
+    html = data.get("html", "")
+    client_name = data.get("client_name", "Client").strip()
+
+    if not html:
+        return {"error": "No HTML content provided"}
+
+    # Clean and style HTML
+    soup = BeautifulSoup(html, "html.parser")
+    remove_empty_paragraphs_around(soup, ["table", "img", "h1", "h2", "h3", "h4", "h5", "h6"])
+    clean_extra_spacing(soup)
+
+    styled_html = f"""
+    <html>
+    <head>
+        <style>
+            table {{
+                border-collapse: collapse;
+                width: 100%;
+            }}
+            th, td {{
+                border: 1px solid #000;
+                padding: 6px;
+                text-align: left;
+            }}
+            pre {{
+                background-color: #f4f4f4;
+                padding: 10px;
+                font-family: Consolas, monospace;
+            }}
+        </style>
+    </head>
+    <body>
+        {str(soup)}
+    </body>
+    </html>
+    """
+
+    docx_io: BytesIO = html2docx(styled_html, title=f"Proposal for {client_name}")
     docx_io.seek(0)
 
-    # Return DOCX file as streaming response
+    # Safe filename
+    safe_client_name = "".join(c for c in client_name if c.isalnum() or c in (" ", "_", "-")).strip()
+    filename = f"Proposal for {safe_client_name}.docx"
+
+    headers = {
+        'Content-Disposition': f'attachment; filename="{filename}"'
+    }
+
     return StreamingResponse(
         docx_io,
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": "attachment; filename=converted.docx"}
+        media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        headers=headers
     )
