@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 from io import BytesIO
 import markdown2
-from html2docx import html2docx, HtmlToDocx
+from html2docx import html2docx
 
 app = FastAPI()
 
@@ -17,13 +17,9 @@ async def convert_md_to_docx(request: Request):
     # Convert Markdown to HTML
     html = markdown2.markdown(md_text)
     
-    # Convert HTML to DOCX
-    converter = HtmlToDocx()
-    docx = converter.parse_html(html)
+    # Convert HTML to DOCX - html2docx() returns a BytesIO object directly
+    docx_io = html2docx(html, title="Converted Document")
     
-    # Save DOCX to in-memory BytesIO object
-    docx_io = BytesIO()
-    docx.save(docx_io)
     docx_io.seek(0)
     
     headers = {
