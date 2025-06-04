@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 from io import BytesIO
 import markdown2
-from html2docx import html2docx
+from html2docx import html2docx, HtmlToDocx
 
 app = FastAPI()
 
