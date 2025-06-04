@@ -68,29 +68,18 @@ async def convert_md_to_html(request: Request):
     )
 
 @app.post("/convert-html-to-docx")
-async def convert_html_to_docx(request: Request):
-    data = await request.json()
-    html = data.get("html", "")
-    client_name = data.get("client_name", "Client").strip()
-
-    if not html:
-        return {"error": "No HTML content provided"}
-
-    # Clean HTML again in case of user input
-    soup = BeautifulSoup(html, "html.parser")
+async def convert_html_to_docx(file: UploadFile = File(...)):
+    html_content = await file.read()
+    soup = BeautifulSoup(html_content, "html.parser")
     remove_empty_paragraphs_around(soup, ["table", "img", "h1", "h2", "h3", "h4", "h5", "h6"])
     cleaned_html = str(soup)
 
-    # Convert HTML to DOCX
-    docx_io: BytesIO = html2docx(cleaned_html, title=f"Proposal for {client_name}")
+    # Convert to DOCX
+    docx_io = html2docx(cleaned_html, title="Converted HTML to DOCX")
     docx_io.seek(0)
 
-    # Safe filename
-    safe_client_name = "".join(c for c in client_name if c.isalnum() or c in (" ", "_", "-")).strip()
-    filename = f"Proposal for {safe_client_name}.docx"
-
     headers = {
-        'Content-Disposition': f'attachment; filename="{filename}"'
+        'Content-Disposition': 'attachment; filename="Converted.docx"'
     }
 
     return StreamingResponse(
