@@ -44,9 +44,16 @@ def clean_extra_spacing_around_tables(soup):
 def create_professional_markdown_template(md_content, client_name, project_title="Project Proposal"):
     """Create a professional markdown template matching the reference document structure"""
     
-    # Extract headings for TOC
-    soup = BeautifulSoup(markdown2.markdown(md_content, extras=['tables', 'fenced-code-blocks']), 'html.parser')
-    headings = soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+    # Extract headings for TOC - but exclude any existing TOC headings
+    html_content = markdown2.markdown(md_content, extras=['tables', 'fenced-code-blocks'])
+    soup = BeautifulSoup(html_content, 'html.parser')
+    
+    # Filter out any headings that contain "table of contents" or similar
+    headings = []
+    for heading in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+        heading_text = heading.get_text().strip().lower()
+        if 'table of contents' not in heading_text and 'toc' not in heading_text:
+            headings.append(heading)
     
     # Build TOC
     toc_lines = []
@@ -55,16 +62,24 @@ def create_professional_markdown_template(md_content, client_name, project_title
     for heading in headings:
         level = int(heading.name[1])
         text = heading.get_text().strip()
+        
+        # Skip if it's a TOC-related heading
+        if 'table of contents' in text.lower() or 'toc' in text.lower():
+            continue
+            
         indent = "  " * (level - 1) if level > 1 else ""
         
+        # Create anchor-friendly ID
+        anchor_id = text.lower().replace(' ', '-').replace(':', '').replace('&', '').replace('.', '')
+        
         if level == 1:
-            toc_lines.append(f"**[{text} {page_counter}](#{text.lower().replace(' ', '-').replace(':', '')})**")
+            toc_lines.append(f"**{text}** ....................................... {page_counter}")
             page_counter += 2
         elif level == 2:
-            toc_lines.append(f"{indent}[{text} {page_counter}](#{text.lower().replace(' ', '-').replace(':', '')})")
+            toc_lines.append(f"{indent}{text} ....................................... {page_counter}")
             page_counter += 1
         else:
-            toc_lines.append(f"{indent}[{text}](#{text.lower().replace(' ', '-').replace(':', '')})")
+            toc_lines.append(f"{indent}{text}")
     
     # Create the enhanced markdown with YAML front matter
     current_date = datetime.now().strftime('%B %d, %Y')
@@ -114,15 +129,14 @@ header-includes: |
     \\end{{titlepage}}
   }}
   \\makeatother
+toc: true
+toc-depth: 3
 ---
 
 \\maketitle
 \\newpage
 
-# Table of Contents
-
-{chr(10).join(toc_lines)}
-
+\\tableofcontents
 \\newpage
 
 {md_content}
