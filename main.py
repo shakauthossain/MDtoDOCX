@@ -4,6 +4,9 @@ from io import BytesIO
 import markdown2
 from html2docx import html2docx
 from bs4 import BeautifulSoup
+import tempfile
+import subprocess
+import os
 
 app = FastAPI()
 
@@ -80,18 +83,31 @@ async def convert_md_to_html(request: Request):
 
 @app.post("/convert-html-to-docx")
 async def convert_html_to_docx(file: UploadFile = File(...)):
-    html_content = await file.read()  # Read uploaded HTML file content
+    # Read uploaded HTML content
+    html_content = await file.read()
 
-    # Convert HTML content directly to DOCX BytesIO object
-    docx_io = html2docx(html_content.decode('utf-8'), title="Proposal")
-    docx_io.seek(0)
+    # Save HTML content to a temporary file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp_html:
+        tmp_html.write(html_content)
+        tmp_html_path = tmp_html.name
 
-    headers = {
-        'Content-Disposition': 'attachment; filename="Proposal.docx"'
-    }
+    # Create path for DOCX output
+    tmp_docx_path = tmp_html_path.replace(".html", ".docx")
 
-    return StreamingResponse(
-        docx_io,
-        media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        headers=headers
-    )
+    try:
+        # Use Pandoc to convert HTML to DOCX
+        subprocess.run(["pandoc", tmp_html_path, "-o", tmp_docx_path], check=True)
+
+        # Return the generated DOCX file
+        return FileResponse(
+            tmp_docx_path,
+            filename="Proposal.docx",
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+    except subprocess.CalledProcessError as e:
+        return JSONResponse(status_code=500, content={"error": "Pandoc conversion failed", "details": str(e)})
+    finally:
+        # Clean up the temporary HTML file
+        if os.path.exists(tmp_html_path):
+            os.unlink(tmp_html_path)
+        # Clean up the DOCX file after response is returned by FileResponse (optional if you use FileResponse streaming)
