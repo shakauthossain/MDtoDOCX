@@ -44,16 +44,9 @@ def clean_extra_spacing_around_tables(soup):
 def create_professional_markdown_template(md_content, client_name, project_title="Project Proposal"):
     """Create a professional markdown template matching the reference document structure"""
     
-    # Extract headings for TOC - but exclude any existing TOC headings
-    html_content = markdown2.markdown(md_content, extras=['tables', 'fenced-code-blocks'])
-    soup = BeautifulSoup(html_content, 'html.parser')
-    
-    # Filter out any headings that contain "table of contents" or similar
-    headings = []
-    for heading in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
-        heading_text = heading.get_text().strip().lower()
-        if 'table of contents' not in heading_text and 'toc' not in heading_text:
-            headings.append(heading)
+    # Extract headings for TOC
+    soup = BeautifulSoup(markdown2.markdown(md_content, extras=['tables', 'fenced-code-blocks']), 'html.parser')
+    headings = soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
     
     # Build TOC
     toc_lines = []
@@ -62,24 +55,16 @@ def create_professional_markdown_template(md_content, client_name, project_title
     for heading in headings:
         level = int(heading.name[1])
         text = heading.get_text().strip()
-        
-        # Skip if it's a TOC-related heading
-        if 'table of contents' in text.lower() or 'toc' in text.lower():
-            continue
-            
         indent = "  " * (level - 1) if level > 1 else ""
         
-        # Create anchor-friendly ID
-        anchor_id = text.lower().replace(' ', '-').replace(':', '').replace('&', '').replace('.', '')
-        
         if level == 1:
-            toc_lines.append(f"**{text}** ....................................... {page_counter}")
+            toc_lines.append(f"**[{text} {page_counter}](#{text.lower().replace(' ', '-').replace(':', '')})**")
             page_counter += 2
         elif level == 2:
-            toc_lines.append(f"{indent}{text} ....................................... {page_counter}")
+            toc_lines.append(f"{indent}[{text} {page_counter}](#{text.lower().replace(' ', '-').replace(':', '')})")
             page_counter += 1
         else:
-            toc_lines.append(f"{indent}{text}")
+            toc_lines.append(f"{indent}[{text}](#{text.lower().replace(' ', '-').replace(':', '')})")
     
     # Create the enhanced markdown with YAML front matter
     current_date = datetime.now().strftime('%B %d, %Y')
@@ -129,14 +114,15 @@ header-includes: |
     \\end{{titlepage}}
   }}
   \\makeatother
-toc: true
-toc-depth: 3
 ---
 
 \\maketitle
 \\newpage
 
-\\tableofcontents
+# Table of Contents
+
+{chr(10).join(toc_lines)}
+
 \\newpage
 
 {md_content}
@@ -469,7 +455,7 @@ async def convert_md_to_html(request: Request):
         media_type='text/html',
         headers=headers
     )
-    
+
 @app.post("/convert-html-to-docx")
 async def convert_html_to_docx(file: UploadFile = File(...)):
     html_content = await file.read()
@@ -521,95 +507,8 @@ async def convert_md_to_docx_professional(request: Request):
     if not md_text:
         return {"error": "No markdown text provided"}
     
-    # Clean any existing TOC from the markdown
-    def clean_existing_toc(md_content):
-        lines = md_content.split('\n')
-        cleaned_lines = []
-        skip_toc = False
-        
-        for line in lines:
-            line_lower = line.lower().strip()
-            
-            # Skip lines that look like TOC entries
-            if ('table of contents' in line_lower or 
-                line.strip().startswith('1.') or 
-                line.strip().startswith('2.') or
-                'page' in line_lower and '...' in line):
-                skip_toc = True
-                continue
-                
-            # Stop skipping when we hit a real heading
-            if skip_toc and line.startswith('# ') and 'table of contents' not in line_lower:
-                skip_toc = False
-                
-            if not skip_toc:
-                cleaned_lines.append(line)
-        
-        return '\n'.join(cleaned_lines)
-    
-    # Clean the input markdown
-    cleaned_md = clean_existing_toc(md_text)
-    
-    # Create enhanced markdown with YAML front matter (no manual TOC)
-    current_date = datetime.now().strftime('%B %d, %Y')
-    
-    enhanced_md = f"""---
-title: "{project_title}"
-subtitle: "For: {client_name}"
-date: "{current_date}"
-geometry: "margin=1in"
-fontsize: 11pt
-linestretch: 1.15
-documentclass: article
-classoption: 
-- onecolumn
-header-includes: |
-  \\usepackage{{fancyhdr}}
-  \\usepackage{{graphicx}}
-  \\usepackage{{xcolor}}
-  \\usepackage{{sectsty}}
-  \\usepackage{{titlesec}}
-  \\usepackage{{tocloft}}
-  
-  % Header and footer
-  \\pagestyle{{fancy}}
-  \\fancyhf{{}}
-  \\renewcommand{{\\headrulewidth}}{{0pt}}
-  \\fancyfoot[C]{{\\thepage}}
-  
-  % Section formatting
-  \\sectionfont{{\\color{{black}}\\large}}
-  \\subsectionfont{{\\color{{black}}\\normalsize}}
-  
-  % TOC formatting
-  \\renewcommand{{\\cftsecleader}}{{\\cftdotfill{{\\cftdotsep}}}}
-  \\renewcommand{{\\cftsubsecleader}}{{\\cftdotfill{{\\cftdotsep}}}}
-  
-  % Title page
-  \\makeatletter
-  \\renewcommand{{\\maketitle}}{{
-    \\begin{{titlepage}}
-      \\centering
-      \\vspace*{{2cm}}
-      {{\\Huge\\bfseries \\@title}}\\\\[1cm]
-      {{\\Large \\@subtitle}}\\\\[2cm]
-      {{\\large \\@date}}
-      \\vfill
-    \\end{{titlepage}}
-  }}
-  \\makeatother
-toc: true
-toc-depth: 3
----
-
-\\maketitle
-\\newpage
-
-\\tableofcontents
-\\newpage
-
-{cleaned_md}
-"""
+    # Create professional markdown template
+    enhanced_md = create_professional_markdown_template(md_text, client_name, project_title)
     
     with tempfile.NamedTemporaryFile(delete=False, suffix=".md", mode='w', encoding='utf-8') as tmp_md:
         tmp_md.write(enhanced_md)
@@ -622,15 +521,14 @@ toc-depth: 3
     create_reference_docx_template()
     
     try:
-        # Fixed pandoc command - removed --number-sections and simplified
         pandoc_cmd = [
             "pandoc",
             tmp_md_path,
             "-o", tmp_docx_path,
             "--standalone",
-            "--table-of-contents",
+            "--toc",
             "--toc-depth=3",
-            # Removed --number-sections to prevent 0.1, 0.2 numbering
+            "--number-sections",
         ]
         
         # Add reference document if it exists
