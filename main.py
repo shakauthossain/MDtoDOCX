@@ -521,8 +521,95 @@ async def convert_md_to_docx_professional(request: Request):
     if not md_text:
         return {"error": "No markdown text provided"}
     
-    # Create professional markdown template
-    enhanced_md = create_professional_markdown_template(md_text, client_name, project_title)
+    # Clean any existing TOC from the markdown
+    def clean_existing_toc(md_content):
+        lines = md_content.split('\n')
+        cleaned_lines = []
+        skip_toc = False
+        
+        for line in lines:
+            line_lower = line.lower().strip()
+            
+            # Skip lines that look like TOC entries
+            if ('table of contents' in line_lower or 
+                line.strip().startswith('1.') or 
+                line.strip().startswith('2.') or
+                'page' in line_lower and '...' in line):
+                skip_toc = True
+                continue
+                
+            # Stop skipping when we hit a real heading
+            if skip_toc and line.startswith('# ') and 'table of contents' not in line_lower:
+                skip_toc = False
+                
+            if not skip_toc:
+                cleaned_lines.append(line)
+        
+        return '\n'.join(cleaned_lines)
+    
+    # Clean the input markdown
+    cleaned_md = clean_existing_toc(md_text)
+    
+    # Create enhanced markdown with YAML front matter (no manual TOC)
+    current_date = datetime.now().strftime('%B %d, %Y')
+    
+    enhanced_md = f"""---
+title: "{project_title}"
+subtitle: "For: {client_name}"
+date: "{current_date}"
+geometry: "margin=1in"
+fontsize: 11pt
+linestretch: 1.15
+documentclass: article
+classoption: 
+- onecolumn
+header-includes: |
+  \\usepackage{{fancyhdr}}
+  \\usepackage{{graphicx}}
+  \\usepackage{{xcolor}}
+  \\usepackage{{sectsty}}
+  \\usepackage{{titlesec}}
+  \\usepackage{{tocloft}}
+  
+  % Header and footer
+  \\pagestyle{{fancy}}
+  \\fancyhf{{}}
+  \\renewcommand{{\\headrulewidth}}{{0pt}}
+  \\fancyfoot[C]{{\\thepage}}
+  
+  % Section formatting
+  \\sectionfont{{\\color{{black}}\\large}}
+  \\subsectionfont{{\\color{{black}}\\normalsize}}
+  
+  % TOC formatting
+  \\renewcommand{{\\cftsecleader}}{{\\cftdotfill{{\\cftdotsep}}}}
+  \\renewcommand{{\\cftsubsecleader}}{{\\cftdotfill{{\\cftdotsep}}}}
+  
+  % Title page
+  \\makeatletter
+  \\renewcommand{{\\maketitle}}{{
+    \\begin{{titlepage}}
+      \\centering
+      \\vspace*{{2cm}}
+      {{\\Huge\\bfseries \\@title}}\\\\[1cm]
+      {{\\Large \\@subtitle}}\\\\[2cm]
+      {{\\large \\@date}}
+      \\vfill
+    \\end{{titlepage}}
+  }}
+  \\makeatother
+toc: true
+toc-depth: 3
+---
+
+\\maketitle
+\\newpage
+
+\\tableofcontents
+\\newpage
+
+{cleaned_md}
+"""
     
     with tempfile.NamedTemporaryFile(delete=False, suffix=".md", mode='w', encoding='utf-8') as tmp_md:
         tmp_md.write(enhanced_md)
@@ -535,14 +622,15 @@ async def convert_md_to_docx_professional(request: Request):
     create_reference_docx_template()
     
     try:
+        # Fixed pandoc command - removed --number-sections and simplified
         pandoc_cmd = [
             "pandoc",
             tmp_md_path,
             "-o", tmp_docx_path,
             "--standalone",
-            "--toc",
+            "--table-of-contents",
             "--toc-depth=3",
-            "--number-sections",
+            # Removed --number-sections to prevent 0.1, 0.2 numbering
         ]
         
         # Add reference document if it exists
