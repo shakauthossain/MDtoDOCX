@@ -1,7 +1,5 @@
-function Table(elem)
-  elem.attr = elem.attr or {}
-  elem.attr.classes = elem.attr.classes or {}
-  elem.attr.attributes = elem.attr.attributes or {}
-  elem.attr.attributes['border'] = '1'
-  return elem
+function Table(el)
+  el.attributes = el.attributes or {}
+  el.attributes['style'] = 'width:100%;border:1px solid black;border-collapse:collapse'
+  return el
 end
