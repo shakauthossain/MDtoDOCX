@@ -115,16 +115,30 @@ async def convert_md_to_html(request: Request):
 async def convert_html_to_docx(file: UploadFile = File(...)):
     html_content = await file.read()
 
-    cleaned_html = add_table_borders_to_html(html_content.decode("utf-8"))
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp_html:
-        tmp_html.write(cleaned_html.encode("utf-8"))
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".html", mode='w', encoding='utf-8') as tmp_html:
+        tmp_html.write(html_content.decode("utf-8"))
         tmp_html_path = tmp_html.name
+
+    lua_filter_code = '''
+function Table(el)
+  el.attributes = el.attributes or {}
+  el.attributes['style'] = 'width:100%;border:1px solid black;border-collapse:collapse'
+  return el
+end
+'''
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".lua", mode='w', encoding='utf-8') as tmp_lua:
+        tmp_lua.write(lua_filter_code)
+        tmp_lua_path = tmp_lua.name
 
     tmp_docx_path = tmp_html_path.replace(".html", ".docx")
 
     try:
-        subprocess.run(["pandoc", tmp_html_path, "-o", tmp_docx_path, "--reference-doc=/mnt/data/reference.docx"], check=True)
+        subprocess.run([
+            "pandoc", tmp_html_path, "-o", tmp_docx_path,
+            "--standalone",
+            f"--lua-filter={tmp_lua_path}"
+        ], check=True)
 
         return FileResponse(
             tmp_docx_path,
@@ -136,6 +150,8 @@ async def convert_html_to_docx(file: UploadFile = File(...)):
     finally:
         if os.path.exists(tmp_html_path):
             os.unlink(tmp_html_path)
+        if os.path.exists(tmp_lua_path):
+            os.unlink(tmp_lua_path)
 
 @app.post("/convert-md-to-docx")
 async def convert_md_to_docx(request: Request):
@@ -146,11 +162,23 @@ async def convert_md_to_docx(request: Request):
     if not md_text:
         return {"error": "No markdown text provided"}
 
+    lua_filter_code = '''
+function Table(el)
+  el.attributes = el.attributes or {}
+  el.attributes['style'] = 'width:100%;border:1px solid black;border-collapse:collapse'
+  return el
+end
+'''
+
     safe_client_name = "".join(c for c in client_name if c.isalnum() or c in (" ", "_", "-")).strip()
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".md", mode='w', encoding='utf-8') as tmp_md:
         tmp_md.write(md_text)
         tmp_md_path = tmp_md.name
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".lua", mode='w', encoding='utf-8') as tmp_lua:
+        tmp_lua.write(lua_filter_code)
+        tmp_lua_path = tmp_lua.name
 
     tmp_docx_path = tmp_md_path.replace(".md", ".docx")
 
@@ -158,7 +186,7 @@ async def convert_md_to_docx(request: Request):
         subprocess.run([
             "pandoc", tmp_md_path, "-o", tmp_docx_path,
             "--standalone",
-            "--reference-doc=reference.docx"
+            f"--lua-filter={tmp_lua_path}"
         ], check=True)
 
         filename = f"Proposal for {safe_client_name}.docx"
@@ -173,3 +201,5 @@ async def convert_md_to_docx(request: Request):
     finally:
         if os.path.exists(tmp_md_path):
             os.unlink(tmp_md_path)
+        if os.path.exists(tmp_lua_path):
+            os.unlink(tmp_lua_path)
