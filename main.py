@@ -156,7 +156,14 @@ async def convert_md_to_docx(request: Request):
     tmp_docx_path = tmp_md_path.replace(".md", ".docx")
 
     try:
-        subprocess.run(["pandoc", tmp_md_path, "-o", tmp_docx_path, "--standalone"], check=True)
+        subprocess.run([
+            "pandoc", tmp_md_path, 
+            "-o", tmp_docx_path,
+            "--standalone",
+            "--toc",
+            "--number-sections",
+            "--lua-filter=add-borders.lua"
+        ], check=True)
 
         filename = f"Proposal for {safe_client_name}.docx"
 
