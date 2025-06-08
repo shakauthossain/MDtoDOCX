@@ -124,7 +124,7 @@ async def convert_html_to_docx(file: UploadFile = File(...)):
     tmp_docx_path = tmp_html_path.replace(".html", ".docx")
 
     try:
-        subprocess.run(["pandoc", tmp_html_path, "-o", tmp_docx_path], check=True)
+        subprocess.run(["pandoc", tmp_html_path, "-o", tmp_docx_path, "--reference-doc=/mnt/data/reference.docx"], check=True)
 
         return FileResponse(
             tmp_docx_path,
@@ -146,43 +146,19 @@ async def convert_md_to_docx(request: Request):
     if not md_text:
         return {"error": "No markdown text provided"}
 
-    lua_filter_code = '''
-function Table(el)
-  el.attributes = el.attributes or {}
-  el.attributes['style'] = 'width:100%;border:1px solid black;border-collapse:collapse'
-
-  for r = 1, #el.bodies do
-    local body = el.bodies[r]
-    for i = 1, #body.body do
-      local row = body.body[i]
-      for j = 1, #row.cells do
-        local cell = row.cells[j]
-        cell.attributes = cell.attributes or {}
-        cell.attributes['style'] = 'border:1px solid black;padding:6px;'
-      end
-    end
-  end
-
-  return el
-end
-'''
+    safe_client_name = "".join(c for c in client_name if c.isalnum() or c in (" ", "_", "-")).strip()
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".md", mode='w', encoding='utf-8') as tmp_md:
         tmp_md.write(md_text)
         tmp_md_path = tmp_md.name
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".lua", mode='w', encoding='utf-8') as tmp_lua:
-        tmp_lua.write(lua_filter_code)
-        tmp_lua_path = tmp_lua.name
-
-    safe_client_name = "".join(c for c in client_name if c.isalnum() or c in (" ", "_", "-")).strip()
     tmp_docx_path = tmp_md_path.replace(".md", ".docx")
 
     try:
         subprocess.run([
             "pandoc", tmp_md_path, "-o", tmp_docx_path,
             "--standalone",
-            f"--lua-filter={tmp_lua_path}"
+            "--reference-doc=/mnt/data/reference.docx"
         ], check=True)
 
         filename = f"Proposal for {safe_client_name}.docx"
@@ -197,5 +173,3 @@ end
     finally:
         if os.path.exists(tmp_md_path):
             os.unlink(tmp_md_path)
-        if os.path.exists(tmp_lua_path):
-            os.unlink(tmp_lua_path)
