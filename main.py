@@ -2,7 +2,6 @@ from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from io import BytesIO
 import markdown2
-from html2docx import html2docx
 from bs4 import BeautifulSoup
 import tempfile
 import subprocess
@@ -27,18 +26,30 @@ def remove_empty_paragraphs_around(soup, tag_names):
                     break
 
 def clean_extra_spacing_around_tables(soup):
-    # Remove empty or whitespace-only <p> tags
     for p in soup.find_all("p"):
         if not p.text.strip():
             p.decompose()
 
-    # Remove <br> or empty <p> directly after <table>
     for table in soup.find_all("table"):
         next_sibling = table.find_next_sibling()
         while next_sibling and (next_sibling.name == "br" or (next_sibling.name == "p" and not next_sibling.text.strip())):
             temp = next_sibling.find_next_sibling()
             next_sibling.decompose()
             next_sibling = temp
+
+def add_table_borders_to_html(html_content: str) -> str:
+    """Enhance <table> tags in HTML with inline border styles so Pandoc shows them in DOCX."""
+    soup = BeautifulSoup(html_content, "html.parser")
+
+    for table in soup.find_all("table"):
+        table['border'] = "1"
+        table['style'] = "border-collapse: collapse; width: 100%;"
+
+        for row in table.find_all("tr"):
+            for cell in row.find_all(["th", "td"]):
+                cell['style'] = "border: 1px solid black; padding: 6px;"
+
+    return str(soup)
 
 @app.post("/convert-md-to-html")
 async def convert_md_to_html(request: Request):
@@ -60,14 +71,12 @@ async def convert_md_to_html(request: Request):
     remove_empty_paragraphs_around(soup, ["table", "img", "h1", "h2", "h3", "h4", "h5", "h6"])
     clean_extra_spacing_around_tables(soup)
 
-    cleaned_html = str(soup)
+    cleaned_html = add_table_borders_to_html(str(soup))
 
-    # Prepare HTML as a downloadable fileAdd commentMore actions
     html_bytes = cleaned_html.encode("utf-8")
     html_io = BytesIO(html_bytes)
     html_io.seek(0)
 
-    # Safe filename
     safe_client_name = "".join(c for c in client_name if c.isalnum() or c in (" ", "_", "-")).strip()
     filename = f"Proposal for {safe_client_name}.html"
 
@@ -83,22 +92,17 @@ async def convert_md_to_html(request: Request):
 
 @app.post("/convert-html-to-docx")
 async def convert_html_to_docx(file: UploadFile = File(...)):
-    # Read uploaded HTML content
     html_content = await file.read()
 
-    # Save HTML content to a temporary file
     with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp_html:
         tmp_html.write(html_content)
         tmp_html_path = tmp_html.name
 
-    # Create path for DOCX output
     tmp_docx_path = tmp_html_path.replace(".html", ".docx")
 
     try:
-        # Use Pandoc to convert HTML to DOCX
         subprocess.run(["pandoc", tmp_html_path, "-o", tmp_docx_path], check=True)
 
-        # Return the generated DOCX file
         return FileResponse(
             tmp_docx_path,
             filename="Proposal.docx",
@@ -107,7 +111,5 @@ async def convert_html_to_docx(file: UploadFile = File(...)):
     except subprocess.CalledProcessError as e:
         return JSONResponse(status_code=500, content={"error": "Pandoc conversion failed", "details": str(e)})
     finally:
-        # Clean up the temporary HTML file
         if os.path.exists(tmp_html_path):
             os.unlink(tmp_html_path)
-        # Clean up the DOCX file after response is returned by FileResponse (optional if you use FileResponse streaming)
