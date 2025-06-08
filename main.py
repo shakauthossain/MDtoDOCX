@@ -102,7 +102,7 @@ async def convert_md_to_html(request: Request):
     filename = f"Proposal for {safe_client_name}.html"
 
     headers = {
-        'Content-Disposition': f'attachment; filename="{filename}"
+        'Content-Disposition': f'attachment; filename="{filename}"'
     }
 
     return StreamingResponse(
