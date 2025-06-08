@@ -151,10 +151,15 @@ function Table(el)
   el.attributes = el.attributes or {}
   el.attributes['style'] = 'width:100%;border:1px solid black;border-collapse:collapse'
 
-  for _, row in ipairs(el.rows) do
-    for _, cell in ipairs(row) do
-      cell.attributes = cell.attributes or {}
-      cell.attributes['style'] = 'border:1px solid black;padding:6px;'
+  for r = 1, #el.bodies do
+    local body = el.bodies[r]
+    for i = 1, #body.body do
+      local row = body.body[i]
+      for j = 1, #row.cells do
+        local cell = row.cells[j]
+        cell.attributes = cell.attributes or {}
+        cell.attributes['style'] = 'border:1px solid black;padding:6px;'
+      end
     end
   end
 
