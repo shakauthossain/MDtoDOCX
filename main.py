@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from io import BytesIO
 import markdown2
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 import tempfile
 import subprocess
 import os
@@ -38,12 +38,33 @@ def clean_extra_spacing_around_tables(soup):
             next_sibling = temp
 
 def add_table_borders_to_html(html_content: str) -> str:
-    """Enhance <table> tags in HTML with inline border styles so Pandoc shows them in DOCX."""
     soup = BeautifulSoup(html_content, "html.parser")
 
     for table in soup.find_all("table"):
         table['border'] = "1"
         table['style'] = "border: 1px solid black; border-collapse: collapse; width: 100%;"
+
+        # Create colgroup
+        first_row = table.find("tr")
+        if first_row:
+            col_count = len(first_row.find_all(["td", "th"]))
+            colgroup = soup.new_tag("colgroup")
+            for _ in range(col_count):
+                col = soup.new_tag("col")
+                col['style'] = "width: {}%;".format(round(100 / col_count))
+                colgroup.append(col)
+            table.insert(0, colgroup)
+
+        # Wrap with thead and tbody
+        rows = table.find_all("tr")
+        if rows:
+            thead = soup.new_tag("thead")
+            thead.append(rows[0])
+            tbody = soup.new_tag("tbody")
+            for row in rows[1:]:
+                tbody.append(row)
+            table.append(thead)
+            table.append(tbody)
 
         for row in table.find_all("tr"):
             for cell in row.find_all(["th", "td"]):
@@ -96,7 +117,7 @@ async def convert_md_to_html(request: Request):
 async def convert_html_to_docx(file: UploadFile = File(...)):
     html_content = await file.read()
 
-    cleaned_html = add_table_borders_to_html(html_content.decode("utf-8"))
+    cleaned_html = add_table_borders_to_html(html_i content.decode("utf-8"))
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp_html:
         tmp_html.write(cleaned_html.encode("utf-8"))
