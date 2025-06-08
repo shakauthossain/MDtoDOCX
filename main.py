@@ -88,14 +88,22 @@ async def convert_html_to_docx(file: UploadFile = File(...)):
         tmp_html_path = tmp_html.name
 
     tmp_docx_path = tmp_html_path.replace(".html", ".docx")
+    reference_path = "notionhive_reference.docx"  # This must be in the same directory
 
     try:
-        # Build Pandoc command
-        pandoc_cmd = ["pandoc", tmp_html_path, "-o", tmp_docx_path]
+        pandoc_cmd = [
+            "pandoc",
+            tmp_html_path,
+            "-o", tmp_docx_path,
+            "--standalone",
+            "--from=html",
+            "--to=docx",
+            "--toc",
+            "--toc-depth=3"
+        ]
 
-        # Use reference DOCX if available
-        if os.path.exists(REFERENCE_DOCX):
-            pandoc_cmd += ["--reference-doc", REFERENCE_DOCX]
+        if os.path.exists(reference_path):
+            pandoc_cmd.extend(["--reference-doc", reference_path])
 
         subprocess.run(pandoc_cmd, check=True)
 
