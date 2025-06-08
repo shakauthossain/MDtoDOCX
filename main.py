@@ -43,11 +43,13 @@ def add_table_borders_to_html(html_content: str) -> str:
 
     for table in soup.find_all("table"):
         table['border'] = "1"
-        table['style'] = "border-collapse: collapse; width: 100%;"
+        table['style'] = "border: 1px solid black; border-collapse: collapse; width: 100%;"
 
         for row in table.find_all("tr"):
             for cell in row.find_all(["th", "td"]):
-                cell['style'] = "border: 1px solid black; padding: 6px;"
+                existing_style = cell.get('style', '')
+                new_style = "border: 1px solid black; padding: 6px;"
+                cell['style'] = f"{existing_style} {new_style}".strip()
 
     return str(soup)
 
@@ -94,8 +96,10 @@ async def convert_md_to_html(request: Request):
 async def convert_html_to_docx(file: UploadFile = File(...)):
     html_content = await file.read()
 
+    cleaned_html = add_table_borders_to_html(html_content.decode("utf-8"))
+
     with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp_html:
-        tmp_html.write(html_content)
+        tmp_html.write(cleaned_html.encode("utf-8"))
         tmp_html_path = tmp_html.name
 
     tmp_docx_path = tmp_html_path.replace(".html", ".docx")
