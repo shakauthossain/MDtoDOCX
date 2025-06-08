@@ -117,7 +117,7 @@ async def convert_md_to_html(request: Request):
 async def convert_html_to_docx(file: UploadFile = File(...)):
     html_content = await file.read()
 
-    cleaned_html = add_table_borders_to_html(html_i content.decode("utf-8"))
+    cleaned_html = add_table_borders_to_html(html_content.decode("utf-8"))
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp_html:
         tmp_html.write(cleaned_html.encode("utf-8"))
