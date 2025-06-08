@@ -44,7 +44,6 @@ def add_table_borders_to_html(html_content: str) -> str:
         table['border'] = "1"
         table['style'] = "border: 1px solid black; border-collapse: collapse; width: 100%;"
 
-        # Create colgroup
         first_row = table.find("tr")
         if first_row:
             col_count = len(first_row.find_all(["td", "th"]))
@@ -55,7 +54,6 @@ def add_table_borders_to_html(html_content: str) -> str:
                 colgroup.append(col)
             table.insert(0, colgroup)
 
-        # Wrap with thead and tbody
         rows = table.find_all("tr")
         if rows:
             thead = soup.new_tag("thead")
@@ -157,11 +155,8 @@ async def convert_md_to_docx(request: Request):
 
     try:
         subprocess.run([
-            "pandoc", tmp_md_path, 
-            "-o", tmp_docx_path,
+            "pandoc", tmp_md_path, "-o", tmp_docx_path,
             "--standalone",
-            "--toc",
-            "--number-sections",
             "--lua-filter=add-borders.lua"
         ], check=True)
 
