@@ -1,13 +1,17 @@
 from fastapi import FastAPI, Request, UploadFile, File
-from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
+from fastapi.responses import StreamingResponse, JSONResponse
+from bs4 import BeautifulSoup, Tag
+from docx import Document
+from docx.shared import Inches
+from docx.enum.section import WD_ORIENT
+from PIL import Image
 from io import BytesIO
 import markdown2
-from bs4 import BeautifulSoup, Tag
-import tempfile
-import subprocess
-import os
+import io
 
 app = FastAPI()
+
+# === Markdown to HTML Utility Functions ===
 
 def remove_empty_paragraphs_around(soup, tag_names):
     for tag_name in tag_names:
@@ -72,6 +76,8 @@ def add_table_borders_to_html(html_content: str) -> str:
 
     return str(soup)
 
+# === API 1: Markdown to HTML ===
+
 @app.post("/convert-md-to-html")
 async def convert_md_to_html(request: Request):
     data = await request.json()
@@ -111,95 +117,39 @@ async def convert_md_to_html(request: Request):
         headers=headers
     )
 
-@app.post("/convert-html-to-docx")
-async def convert_html_to_docx(file: UploadFile = File(...)):
-    html_content = await file.read()
+# === API 2: Merge Cover Image with DOCX ===
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".html", mode='w', encoding='utf-8') as tmp_html:
-        tmp_html.write(html_content.decode("utf-8"))
-        tmp_html_path = tmp_html.name
-
-    lua_filter_code = '''
-function Table(el)
-  el.attributes = el.attributes or {}
-  el.attributes['style'] = 'width:100%;border:1px solid black;border-collapse:collapse'
-  return el
-end
-'''
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".lua", mode='w', encoding='utf-8') as tmp_lua:
-        tmp_lua.write(lua_filter_code)
-        tmp_lua_path = tmp_lua.name
-
-    tmp_docx_path = tmp_html_path.replace(".html", ".docx")
-
+@app.post("/merge-cover-docx")
+async def merge_cover_docx(
+    cover_image: UploadFile = File(...),
+    docx_file: UploadFile = File(...)
+):
     try:
-        subprocess.run([
-            "pandoc", tmp_html_path, "-o", tmp_docx_path,
-            "--standalone",
-            f"--lua-filter={tmp_lua_path}"
-        ], check=True)
+        cover_bytes = await cover_image.read()
+        docx_bytes = await docx_file.read()
 
-        return FileResponse(
-            tmp_docx_path,
-            filename="Proposal.docx",
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        # Create DOCX and insert image
+        doc = Document()
+        section = doc.sections[0]
+        section.orientation = WD_ORIENT.PORTRAIT
+        width = section.page_width - section.left_margin - section.right_margin
+
+        doc.add_picture(BytesIO(cover_bytes), width=width)
+        doc.add_page_break()
+
+        # Load and append content
+        proposal = Document(BytesIO(docx_bytes))
+        for elem in proposal.element.body:
+            doc.element.body.append(elem)
+
+        output_stream = BytesIO()
+        doc.save(output_stream)
+        output_stream.seek(0)
+
+        return StreamingResponse(
+            output_stream,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": 'attachment; filename="Merged_Proposal_With_Cover.docx"'}
         )
-    except subprocess.CalledProcessError as e:
-        return JSONResponse(status_code=500, content={"error": "Pandoc conversion failed", "details": str(e)})
-    finally:
-        if os.path.exists(tmp_html_path):
-            os.unlink(tmp_html_path)
-        if os.path.exists(tmp_lua_path):
-            os.unlink(tmp_lua_path)
-
-@app.post("/convert-md-to-docx")
-async def convert_md_to_docx(request: Request):
-    data = await request.json()
-    md_text = data.get("markdown", "")
-    client_name = data.get("client_name", "Client").strip()
-
-    if not md_text:
-        return {"error": "No markdown text provided"}
-
-    lua_filter_code = '''
-function Table(el)
-  el.attributes = el.attributes or {}
-  el.attributes['style'] = 'width:100%;border:1px solid black;border-collapse:collapse'
-  return el
-end
-'''
-
-    safe_client_name = "".join(c for c in client_name if c.isalnum() or c in (" ", "_", "-")).strip()
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".md", mode='w', encoding='utf-8') as tmp_md:
-        tmp_md.write(md_text)
-        tmp_md_path = tmp_md.name
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".lua", mode='w', encoding='utf-8') as tmp_lua:
-        tmp_lua.write(lua_filter_code)
-        tmp_lua_path = tmp_lua.name
-
-    tmp_docx_path = tmp_md_path.replace(".md", ".docx")
-
-    try:
-        subprocess.run([
-            "pandoc", tmp_md_path, "-o", tmp_docx_path,
-            "--standalone",
-            f"--lua-filter={tmp_lua_path}"
-        ], check=True)
-
-        filename = f"Proposal for {safe_client_name}.docx"
-
-        return FileResponse(
-            tmp_docx_path,
-            filename=filename,
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        )
-    except subprocess.CalledProcessError as e:
-        return JSONResponse(status_code=500, content={"error": "Pandoc conversion failed", "details": str(e)})
-    finally:
-        if os.path.exists(tmp_md_path):
-            os.unlink(tmp_md_path)
-        if os.path.exists(tmp_lua_path):
-            os.unlink(tmp_lua_path)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
