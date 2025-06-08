@@ -91,6 +91,7 @@ async def convert_md_to_html(request: Request):
         media_type='text/html',
         headers=headers
     )
+
 @app.post("/convert-html-to-docx")
 async def convert_html_to_docx(file: UploadFile = File(...)):
     html_content = await file.read()
@@ -104,10 +105,7 @@ async def convert_html_to_docx(file: UploadFile = File(...)):
     tmp_docx_path = tmp_html_path.replace(".html", ".docx")
 
     try:
-        subprocess.run([
-            "pandoc", tmp_html_path, "-o", tmp_docx_path,
-            "--reference-doc=reference.docx"
-        ], check=True)
+        subprocess.run(["pandoc", tmp_html_path, "-o", tmp_docx_path], check=True)
 
         return FileResponse(
             tmp_docx_path,
