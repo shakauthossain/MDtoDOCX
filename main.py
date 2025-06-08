@@ -96,12 +96,7 @@ async def convert_html_to_docx(file: UploadFile = File(...)):
 
     try:
         # Use Pandoc to convert HTML to DOCX
-        subprocess.run([
-        "pandoc",
-        tmp_html_path,
-        "-o", tmp_docx_path,
-        "--reference-doc=reference.docx"
-        ], check=True)
+        subprocess.run(["pandoc", tmp_html_path, "-o", tmp_docx_path], check=True)
 
         # Return the generated DOCX file
         return FileResponse(
