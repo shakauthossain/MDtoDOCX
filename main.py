@@ -158,7 +158,7 @@ async def convert_md_to_docx(request: Request):
         subprocess.run([
             "pandoc", tmp_md_path, "-o", tmp_docx_path,
             "--standalone",
-            "--reference-doc=/mnt/data/reference.docx"
+            "--reference-doc=reference.docx"
         ], check=True)
 
         filename = f"Proposal for {safe_client_name}.docx"
