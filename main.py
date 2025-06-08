@@ -150,6 +150,14 @@ async def convert_md_to_docx(request: Request):
 function Table(el)
   el.attributes = el.attributes or {}
   el.attributes['style'] = 'width:100%;border:1px solid black;border-collapse:collapse'
+
+  for _, row in ipairs(el.rows) do
+    for _, cell in ipairs(row) do
+      cell.attributes = cell.attributes or {}
+      cell.attributes['style'] = 'border:1px solid black;padding:6px;'
+    end
+  end
+
   return el
 end
 '''
